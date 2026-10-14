@@ -15,8 +15,8 @@ from common import Log, DictString, Dict, SaveDict # Direct import of heavily us
 import AnimeLists
 
 ### Variables ###
-TVDB_API_KEY               = 'TODO' # TODO: Need v4 key
-TVDB_API_PIN               = 'TODO'
+TVDB_API_KEY               = 'TODO' # Put your TheTVDB v4 API key here
+TVDB_API_PIN               = ''
 TVDB_IMG_ROOT              = 'https://thetvdb.plexapp.com/banners/' 
 TVDB_BASE_URL              = 'https://api4.thetvdb.com/v4'
 TVDB_LOGIN_URL             = TVDB_BASE_URL + '/login'
@@ -29,7 +29,7 @@ TVDB_EPISODE_TRANSLATION_URL= TVDB_EPISODE_URL + '/translations/{lang}'
 TVDB_MOVIE_URL             = TVDB_BASE_URL + '/movies/{id}'
 TVDB_MOVIE_EXTENDED_URL    = TVDB_MOVIE_URL + '/extended'
 TVDB_MOVIE_TRANSLATION_URL = TVDB_MOVIE_URL + '/translations/{lang}'
-TVDB_SEARCH_URL            = TVDB_BASE_URL + '/search?type=series&query=%s'
+TVDB_SEARCH_URL            = TVDB_BASE_URL + '/search?type={type}&query={name}'
 
 TVDB_LANGUAGES_CODE        = { 'cs': 'ces', 'da': 'dan', 'de': 'deu', 'el': 'ell', 'en': 'eng', 'es': 'spa', 'fi': 'fin', 'fr': 'fra', 'he': 'heb', 
                                'hr': 'hrv', 'hu': 'hun', 'it': 'ita', 'ja': 'jpn', 'ko': 'kor', 'nl': 'nld', 'no': 'nor', 'pl': 'pol', 'pt': 'por',
@@ -358,26 +358,26 @@ def Search(results, media, lang, manual, movie):
   try:
     Login()
     searchType = 'movie' if movie else 'series'
-    searchResult = JSON.ObjectFromString(HTTP.Request(TVDB_SEARCH_URL.format(type=searchType,name=orig_title), headers=common.UpdateDict(common.COMMON_HEADERS, TVDB_HEADERS), cacheTime=0).content)['data']
+    searchResult = JSON.ObjectFromString(HTTP.Request(TVDB_SEARCH_URL.format(type=searchType,name=quote(orig_title.encode('utf-8') if isinstance(orig_title, unicode) else orig_title)), headers=common.UpdateDict(common.COMMON_HEADERS, TVDB_HEADERS), cacheTime=0).content)['data']
     if not searchResult:
       # Do a second try with the year removed from the title, if any
       orig_title = re.sub(r'\s*\(\d{4}\)$', '', orig_title)
-      searchResult = JSON.ObjectFromString(HTTP.Request(TVDB_SEARCH_URL.format(type=searchType,name=orig_title), headers=common.UpdateDict(common.COMMON_HEADERS, TVDB_HEADERS), cacheTime=0).content)['data']
+      searchResult = JSON.ObjectFromString(HTTP.Request(TVDB_SEARCH_URL.format(type=searchType,name=quote(orig_title.encode('utf-8') if isinstance(orig_title, unicode) else orig_title)), headers=common.UpdateDict(common.COMMON_HEADERS, TVDB_HEADERS), cacheTime=0).content)['data']
   except Exception as e: Log.Error("TVDB search failed, Exception: '%s'" % e)
   else:
     for serie in searchResult:
-      ScoreSearch(results, orig_title, Dict(serie, 'name'), Dict(serie, 'tvdb_id'), lang)
+      maxi = max(maxi, ScoreSearch(results, orig_title, Dict(serie, 'name'), Dict(serie, 'tvdb_id'), lang))
       if Dict(serie, 'aliases'):
         for alias in Dict(serie, 'aliases'):
-          ScoreSearch(results, orig_title, alias, Dict(serie, 'tvdb_id'), lang)
+          maxi = max(maxi, ScoreSearch(results, orig_title, alias, Dict(serie, 'tvdb_id'), lang))
   return maxi
 
 def ScoreSearch(results, orig_title, name, id, lang):
   a, b = orig_title, name
   score = 100 - 100 * Util.LevenshteinDistance(a, b) / max(len(a), len(b)) if a != b else 100
-  if maxi < score: maxi = score
   Log.Info("TVDB  - score: '%3d', id: '%6s', title: '%s'" % (score, id, name))
   results.Append(MetadataSearchResult(id="%s-%s" % ('tvdb', id), name="%s [%s-%s]" % (name, 'tvdb', id), year=None, lang=lang, score=score) )
+  return score
 
 def RelativeImagePath(imagePath):
   return imagePath.replace('https://artworks.thetvdb.com/banners/v4','').replace('https://artworks.thetvdb.com/banners/','').replace('/banners/','')
