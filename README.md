@@ -1,3 +1,52 @@
+> [!NOTE]
+> **This is a patched fork of [ZeroQI/Hama.bundle](https://github.com/ZeroQI/Hama.bundle)**, kept for personal use until the fixes below land upstream. Everything else is identical to upstream `master` (as of commit `cfddf8f`).
+
+Fork changes: TheTVDB v4 fixes
+==============================
+All changes are in one file, [`Contents/Code/TheTVDBv4.py`](Contents/Code/TheTVDBv4.py).
+
+| | Upstream (ZeroQI) | This fork |
+|---|---|---|
+| TVDB search URL | `'/search?type=series&query=%s'`, but the code fills it with `.format(type=..., name=...)`, so the `%s` is never replaced. Every TVDB search literally searches for `%s` and finds nothing. | `'/search?type={type}&query={name}'`, so the real title (and `movie`/`series` type) is sent. |
+| Title encoding | Raw title pasted into the URL. Titles with spaces, `&`, `?`, `#` or non-ASCII characters break the request. | Title is UTF-8 encoded and URL-quoted first. |
+| Match scoring | `ScoreSearch()` does `if maxi < score: maxi = score` on a variable that only exists in `Search()`, which raises an error so the best TVDB score is never reported back. | `ScoreSearch()` returns its score and `Search()` keeps the best one, so HAMA can tell how good the TVDB match was. |
+| API key | `TVDB_API_KEY = 'TODO'` (see below) | Still a placeholder here, but you **must** set your own key. |
+
+**What you'll notice:** when a show isn't found on AniDB (or the AniDB match is weak), HAMA falls back to searching TheTVDB. Upstream, that fallback always comes back empty. With this fork it returns real matches, so those shows get identified and pull TVDB titles, summaries, posters and episode info.
+
+The TheTVDB API key issue
+-------------------------
+HAMA's TVDB support was moved to TheTVDB's **v4 API**, which requires every request to be logged in with an API key. Upstream ships with a placeholder:
+
+```python
+TVDB_API_KEY = 'TODO' # TODO: Need v4 key
+```
+
+With `'TODO'` as the key, `Login()` fails, and every TVDB request (search, series info, episodes, artwork) is rejected as unauthorized. The error only shows up in the HAMA logs as `TheTVDBv4.Login() - Authorization Error`, so it looks like TVDB simply has no data.
+
+**This fork does not include a key either, on purpose.** An API key is tied to the account that registered it, and anything pushed to a public repo can be copied and abused. That would get the key rate-limited or revoked for everyone using it. So each user needs their own:
+
+1. Create a free account at [thetvdb.com](https://thetvdb.com) and request an API key from your account's **API Keys** page ([info](https://thetvdb.com/api-information)).
+2. Open `Contents/Code/TheTVDBv4.py` and set it on line 18:
+   ```python
+   TVDB_API_KEY               = 'your-key-here'
+   TVDB_API_PIN               = ''   # only needed for "user-supported" keys
+   ```
+3. Restart Plex Media Server, then **Refresh Metadata** on the affected library or shows.
+
+Keep your edited copy private. Don't commit your key back to a public repo.
+
+Installing this fork
+--------------------
+```bash
+cd "<Plex data>/Plex Media Server/Plug-ins"
+git clone https://github.com/CoreXI7/Hama.bundle.git
+# then set your TVDB key as described above and restart Plex
+```
+If you already have upstream HAMA installed, replace `Contents/Code/TheTVDBv4.py` with the one from this fork, set your key, and restart Plex.
+
+---
+
 HTTP AniDB Metadata Agent (HAMA)
 ================================
 HAMA is a Plex Metadata Agent, initially created By Atomicstrawberry through v0.4 [2015-08-31].
